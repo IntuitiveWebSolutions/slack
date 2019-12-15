@@ -61,6 +61,9 @@ typings/
 .sass-cache
 style.css.map
 
+# SAM Output
+output-template.yml
+
 *.pem
 
 dump.rdb

@@ -1,0 +1,356 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: GitHub Slack App
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 60
+
+Parameters:
+  AppEnv:
+    Type: String
+    AllowedValues:
+      - local
+      - sandbox
+      - stage
+      - prod
+    Description: Environment of this stack
+  LogLevel:
+    Type: String
+    Default: error
+    AllowedValues:
+      - trace
+      - debug
+      - info
+      - warn
+      - error
+      - fatal
+    Description: Probot app log level
+
+Resources:
+  # Network Layer. Pulled from https://gist.github.com/codecitizen/47073231d781979baec47148e40ab38b
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+  IP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - IP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnetA
+  PrivateSubnetA:
+    DependsOn: VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      CidrBlock: "10.0.1.0/24"
+  PrivateSubnetB:
+    DependsOn: VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: !Sub "${AWS::Region}b"
+      CidrBlock: "10.0.2.0/24"
+  PublicSubnetA:
+    DependsOn: VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: VPC
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      CidrBlock: "10.0.3.0/24"
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NatGateway
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+  SubnetRouteTableAssociationLambdaPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetA
+      RouteTableId:
+        Ref: PrivateRouteTable
+  SubnetRouteTableAssociationLambdaPrivateB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetB
+      RouteTableId:
+        Ref: PrivateRouteTable
+  SubnetRouteTableAssociationLambdaPublicA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetA
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  # Lambda
+  LambdaSecurityGroup:
+    DependsOn: VPC
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SecurityGroup for Serverless Functions
+      VpcId:
+        Ref: VPC
+  LambdaSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Secret environment vars for the github slack app."
+      Name: !Sub "/${AppEnv}/githubslack/lambda_secrets"
+      GenerateSecretString:
+        SecretStringTemplate: '{"APP_ID": "TODO", "GITHUB_CLIENT_ID": "TODO", "GITHUB_CLIENT_SECRET": "TODO", "SLACK_APP_ID": "TODO", "SLACK_CLIENT_ID": "TODO", "SLACK_CLIENT_SECRET": "TODO", "SLACK_VERIFICATION_TOKEN": "TODO", "STORAGE_SECRET": "TODO", "SESSION_SECRET": "TODO", "LOG_FORMAT": "", "SENTRY_DSN": "TODO", "HEROKU_SLUG_COMMIT": ""}'
+        GenerateStringKey: "WEBHOOK_SECRET"
+        PasswordLength: 20
+  LambdaFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: ./
+      Handler: lambdaHandler.probot
+      Runtime: nodejs10.x
+      MemorySize: 256
+      VpcConfig:
+        SecurityGroupIds:
+          - "Fn::GetAtt": LambdaSecurityGroup.GroupId
+        SubnetIds:
+          - Ref: PrivateSubnetA
+      Events:
+        Homepage:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /
+            Method: GET
+        APIProxy:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          APP_ENV: !Ref AppEnv
+          LOG_LEVEL: !Ref LogLevel
+          DISABLE_STATS: true
+          GITHUB_SECRETS_REGION: !Sub ${AWS::Region}
+          GITHUB_SECRETS_ID: !Sub "/${AppEnv}/githubslack/lambda_secrets"
+          SLACK_API_URL: "https://slack.com/api/"
+          SLACK_ROOT_URL: "https://slack.com"
+          # These placeholder values are replaced by the values in .env.json in local development.
+          # They are managed via AWS Secrets Manager in production. see: app/initializeAWSEnv.js
+          APP_ID: PLACEHOLDER
+          PRIVATE_KEY: PLACEHOLDER
+          PRIVATE_KEY_PATH: PLACEHOLDER
+          WEBHOOK_SECRET: PLACEHOLDER
+          STORAGE_SECRET: PLACEHOLDER
+          SESSION_SECRET: PLACEHOLDER
+          GITHUB_CLIENT_ID: PLACEHOLDER
+          GITHUB_CLIENT_SECRET: PLACEHOLDER
+          SLACK_APP_ID: PLACEHOLDER
+          SLACK_CLIENT_ID: PLACEHOLDER
+          SLACK_CLIENT_SECRET: PLACEHOLDER
+          SLACK_VERIFICATION_TOKEN: PLACEHOLDER
+          REDIS_URL:
+            Fn::Join:
+              - ""
+              - - "redis://"
+                - Fn::GetAtt:
+                  - "ElasticCacheCluster"
+                  - "RedisEndpoint.Address"
+                - ":"
+                - Fn::GetAtt:
+                  - "ElasticCacheCluster"
+                  - "RedisEndpoint.Port"
+          DATABASE_URL:
+            Fn::Join:
+              - ""
+              - - "postgresql://"
+                - Fn::GetAtt:
+                  - "RDSCluster"
+                  - "Endpoint.Address"
+                - ":"
+                - Fn::GetAtt:
+                  - "RDSCluster"
+                  - "Endpoint.Port"
+                - "/GitHubSlackPostgres"
+          PGUSER:
+            Fn::Join:
+              - ""
+              - - "{{resolve:secretsmanager:"
+                - !Ref RDSSecret
+                - ":SecretString:username}}"
+          PGPASSWORD:
+            Fn::Join:
+              - ""
+              - - "{{resolve:secretsmanager:"
+                - !Ref RDSSecret
+                - ":SecretString:password}}"
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref LambdaSecrets
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref RDSSecret
+        - VPCAccessPolicy: {}
+
+  # Elasticache
+  ElastiCacheSecurityGroup:
+    DependsOn: VPC
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Ingress for Redis Cluster
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "6379"
+        ToPort: "6379"
+        SourceSecurityGroupId:
+          Ref: LambdaSecurityGroup
+  ElasticCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: "Cache Subnet Group"
+      SubnetIds:
+        - Ref: PrivateSubnetA
+  ElasticCacheCluster:
+    DependsOn: ElastiCacheSecurityGroup
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      Engine: redis
+      CacheNodeType: cache.t2.micro
+      NumCacheNodes: 1
+      VpcSecurityGroupIds:
+        - "Fn::GetAtt": ElastiCacheSecurityGroup.GroupId
+      CacheSubnetGroupName:
+        Ref: ElasticCacheSubnetGroup
+
+  # RDS
+  RDSSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "Secret environment vars for the github slack app database."
+      Name: !Sub "/${AppEnv}/githubslack/rds_secret"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "githubslack"}'
+        GenerateStringKey: "password"
+        PasswordLength: 20
+        ExcludeCharacters: '"@/\'
+  RDSSecurityGroup:
+    DependsOn: VPC
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Ingress for RDS Cluster
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "5432"
+        ToPort: "5432"
+        SourceSecurityGroupId:
+          Ref: LambdaSecurityGroup
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Database Subnet Group"
+      SubnetIds:
+        - Ref: PrivateSubnetA
+        - Ref: PrivateSubnetB
+  SecretRDSInstanceAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref RDSSecret
+      TargetId: !Ref RDSCluster
+      TargetType: AWS::RDS::DBCluster
+  RDSCluster:
+    DependsOn: RDSSecurityGroup
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DatabaseName: GitHubSlackPostgres
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      MasterUsername:
+        Fn::Join:
+          - ""
+          - - "{{resolve:secretsmanager:"
+            - !Ref RDSSecret
+            - ":SecretString:username}}"
+      MasterUserPassword:
+        Fn::Join:
+          - ""
+          - - "{{resolve:secretsmanager:"
+            - !Ref RDSSecret
+            - ":SecretString:password}}"
+      ScalingConfiguration:
+        AutoPause: true
+        MaxCapacity: 2
+        MinCapacity: 2
+        SecondsUntilAutoPause: 300
+      StorageEncrypted: true
+      VpcSecurityGroupIds:
+        - "Fn::GetAtt": RDSSecurityGroup.GroupId
+      DBSubnetGroupName:
+        Ref: RDSSubnetGroup
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  Api:
+    Description: API Gateway endpoint URL for Prod stage for GitHub Slack function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  CacheEndpoint:
+    Description: "ElastiCache Endpoint"
+    Value:
+      Fn::GetAtt: ["ElasticCacheCluster", "RedisEndpoint.Address"]
+  PostgresEndpoint:
+    Description: "Aurora Postgres Endpoint"
+    Value:
+      Fn::GetAtt: ["RDSCluster", "Endpoint.Address"]
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt LambdaFunction.Arn
+  # FunctionIamRole:
+  #   Description: Implicit IAM Role created for GitHub Slack function
+  #   Value: !GetAtt LambdaFunctionRole.Arn

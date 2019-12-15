@@ -1,4 +1,6 @@
 {
+  "name": "github-slack",
+  "version": "0.0.1",
   "private": true,
   "license": "MIT",
   "scripts": {
@@ -13,7 +15,9 @@
   },
   "dependencies": {
     "@keyv/redis": "github:integrations/keyv-redis#use-keys",
+    "@sentry/node": "^5.7.1",
     "@slack/web-api": "^5.1.0",
+    "aws-serverless-express": "^3.3.6",
     "axios": "^0.18.1",
     "body-parser": "^1.18.3",
     "connect-timeout": "^1.9.0",
@@ -33,7 +37,6 @@
     "pg": "^7.4.1",
     "probot": "^9.3.1",
     "query-string": "^6.0.0",
-    "raven": "^2.4.1",
     "request": "^2.87.0",
     "sequelize": "^4.44.3",
     "sequelize-cli": "^4.1.1",
@@ -42,6 +45,7 @@
   },
   "devDependencies": {
     "acorn": "^6.0.0",
+    "aws-sdk": "^2.508.0",
     "eslint": "^6.1.0",
     "eslint-config-airbnb-base": "^14.0.0",
     "eslint-config-probot": ">=0.1.0",
