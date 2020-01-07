@@ -1189,7 +1189,7 @@ describe('Integration: notifications', () => {
         payload: issuePayload,
       });
 
-      expect(await Subscription.findById(subscription.id)).toBe(null);
+      expect(await Subscription.findByPk(subscription.id)).toBe(null);
     });
 
     test('other error from slack does not delete subscription', async () => {
