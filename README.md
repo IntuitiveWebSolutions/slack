@@ -133,6 +133,7 @@ These are disabled by default, and can be enabled with the `/github subscribe ow
 - `branches` - Created or deleted branches
 - `commits:all` - All commits pushed to any branch
 - `+label:"your label"` - Filter issues, pull-requests and comments based on their labels.
+- `channels` - Post issue and pull request messages in separate channels
 
 You can subscribe or unsubscribe from multiple settings at once. For example, to turn on activity for pull request reviews and comments:
 
