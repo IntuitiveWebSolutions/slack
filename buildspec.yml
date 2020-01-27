@@ -1,0 +1,15 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      nodejs: 10
+    commands:
+      - npm install --production
+  build:
+    commands:
+      - aws cloudformation package --template-file sam-template.yml --s3-bucket github-slack-channels --s3-prefix githubprchannels --output-template-file cloudformation/template.yaml
+artifacts:
+  files:
+    - cloudformation/template.yaml
+    - cloudformation/template-config.json
+    - cloudformation/service-config.json
