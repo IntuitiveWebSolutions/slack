@@ -57,7 +57,6 @@ Resources:
       SubnetId:
         Ref: PublicSubnetA
   PrivateSubnetA:
-    DependsOn: VPC
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
@@ -65,7 +64,6 @@ Resources:
       AvailabilityZone: !Sub "${AWS::Region}a"
       CidrBlock: "10.0.1.0/24"
   PrivateSubnetB:
-    DependsOn: VPC
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
@@ -73,7 +71,6 @@ Resources:
       AvailabilityZone: !Sub "${AWS::Region}b"
       CidrBlock: "10.0.2.0/24"
   PublicSubnetA:
-    DependsOn: VPC
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
@@ -130,7 +127,6 @@ Resources:
 
   # Lambda
   LambdaSecurityGroup:
-    DependsOn: VPC
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: SecurityGroup for Serverless Functions
@@ -172,7 +168,7 @@ Resources:
         Variables:
           APP_ENV: !Ref AppEnv
           LOG_LEVEL: !Ref LogLevel
-          DISABLE_STATS: true
+          DISABLE_STATS: "true"
           GITHUB_SECRETS_REGION: !Sub ${AWS::Region}
           GITHUB_SECRETS_ID: !Sub "/${AppEnv}/githubslack/lambda_secrets"
           SLACK_API_URL: "https://slack.com/api/"
@@ -235,7 +231,6 @@ Resources:
 
   # Elasticache
   ElastiCacheSecurityGroup:
-    DependsOn: VPC
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Ingress for Redis Cluster
@@ -243,8 +238,8 @@ Resources:
         Ref: VPC
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: "6379"
-        ToPort: "6379"
+        FromPort: 6379
+        ToPort: 6379
         SourceSecurityGroupId:
           Ref: LambdaSecurityGroup
   ElasticCacheSubnetGroup:
@@ -278,7 +273,6 @@ Resources:
         PasswordLength: 20
         ExcludeCharacters: '"@/\'
   RDSSecurityGroup:
-    DependsOn: VPC
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Ingress for RDS Cluster
@@ -286,8 +280,8 @@ Resources:
         Ref: VPC
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort: "5432"
-        ToPort: "5432"
+        FromPort: 5432
+        ToPort: 5432
         SourceSecurityGroupId:
           Ref: LambdaSecurityGroup
   RDSSubnetGroup:
