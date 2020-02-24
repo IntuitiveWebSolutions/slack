@@ -8,5 +8,5 @@ phases:
       - pip install cfn-lint
   build:
     commands:
-      - cfn-lint -t sam-template.yml
+      - cfn-lint -t sam-template.yaml
       - npm test

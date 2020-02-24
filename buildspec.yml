@@ -7,7 +7,7 @@ phases:
       - npm install --production
   build:
     commands:
-      - aws cloudformation package --template-file sam-template.yml --s3-bucket github-slack-channels --s3-prefix githubprchannels --output-template-file cloudformation/template.yaml
+      - aws cloudformation package --template-file sam-template.yaml --s3-bucket github-slack-channels --s3-prefix githubprchannels --output-template-file cloudformation/template.yaml
 artifacts:
   files:
     - cloudformation/template.yaml
