@@ -17,6 +17,7 @@ Resources:
         StackSetDescription: GitHub/Slack integration that posts updates for a particular github project to slack.
         ProdAwsAccountId: "023997594904"
         CodeRepo: slack
+        PipelineBranch: deployment/lambda
         SlackNotificationChannel: app-github-slack-channels
         BuildImage: aws/codebuild/standard:2.0
         TestImage: aws/codebuild/standard:2.0
