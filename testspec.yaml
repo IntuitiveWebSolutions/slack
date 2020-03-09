@@ -9,4 +9,4 @@ phases:
   build:
     commands:
       - cfn-lint -t sam-template.yaml
-      - npm test
+      # - npm test
