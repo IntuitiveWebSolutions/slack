@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  AppEnv:
+    Type: String
+    AllowedValues:
+      - local
+      - sandbox
+      - stage
+      - prod
+    Description: Environment of this stack
+  LogLevel:
+    Type: String
+    Default: error
+    AllowedValues:
+      - trace
+      - debug
+      - info
+      - warn
+      - error
+      - fatal
+    Description: Probot app log level
+
+Resources:
+
+  NestedSAMTemplateStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: "sam-template.yaml"
+      Parameters:
+        AppEnv:
+          Ref: AppEnv
+        LogLevel:
+          Ref: LogLevel
